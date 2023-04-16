@@ -1,0 +1,14 @@
+colabcode
+fastapi
+pytorch-lightning==1.8.4
+intel-extension-for-pytorch
+omegaconf
+einops
+open-clip-torch
+kornia
+xformers
+transformers 
+invisible-watermark
+memory-profiler
+streamlit
+streamlit-drawable-canvas
