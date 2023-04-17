@@ -76,7 +76,8 @@ class DDPM(pl.LightningModule):
                  make_it_fit=False,
                  ucg_training=None,
                  reset_ema=False,
-                 reset_num_ema_updates=False,):
+                 reset_num_ema_updates=False,
+                 ):
         super().__init__()
         assert parameterization in ["eps", "x0", "v"], 'currently only supporting "eps" and "x0" and "v"'
         self.parameterization = parameterization
@@ -87,7 +88,7 @@ class DDPM(pl.LightningModule):
         self.first_stage_key = first_stage_key
         self.image_size = image_size  # try conv?
         self.channels = channels
-        self.use_positional_encodings = use_positional_encodingsse
+        self.use_positional_encodings = use_positional_encodings
         self.model = DiffusionWrapper(unet_config, conditioning_key)
         count_params(self.model, verbose=True)
         self.use_ema = use_ema
@@ -205,11 +206,7 @@ class DDPM(pl.LightningModule):
 
     @torch.no_grad()
     def init_from_ckpt(self, path, ignore_keys=list(), only_model=False):
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
-        sd = torch.load(path, map_location=device)
+        sd = torch.load(path, map_location="cpu")
         if "state_dict" in list(sd.keys()):
             sd = sd["state_dict"]
         keys = list(sd.keys())
@@ -414,7 +411,7 @@ class DDPM(pl.LightningModule):
     def forward(self, x, *args, **kwargs):
         # b, c, h, w, device, img_size, = *x.shape, x.device, self.image_size
         # assert h == img_size and w == img_size, f'height and width of image must be {img_size}'
-        t = torch.randint(0, self.num_timesteps, (x.shape[0],), device='cuda').long() # self.device
+        t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
         return self.p_losses(x, t, *args, **kwargs)
 
     def get_input(self, batch, k):
@@ -443,7 +440,7 @@ class DDPM(pl.LightningModule):
         loss, loss_dict = self.shared_step(batch)
 
         self.log_dict(loss_dict, prog_bar=True,
-                      logger=True, on_step=True, on_epoch=True, rank_zero_only=True)
+                      logger=True, on_step=True, on_epoch=True)
 
         self.log("global_step", self.global_step,
                  prog_bar=True, logger=True, on_step=True, on_epoch=False)
@@ -460,8 +457,8 @@ class DDPM(pl.LightningModule):
         with self.ema_scope():
             _, loss_dict_ema = self.shared_step(batch)
             loss_dict_ema = {key + '_ema': loss_dict_ema[key] for key in loss_dict_ema}
-        self.log_dict(loss_dict_no_ema, prog_bar=False, logger=True, on_step=False, on_epoch=True, rank_zero_only=True)
-        self.log_dict(loss_dict_ema, prog_bar=False, logger=True, on_step=False, on_epoch=True, rank_zero_only=True)
+        self.log_dict(loss_dict_no_ema, prog_bar=False, logger=True, on_step=False, on_epoch=True)
+        self.log_dict(loss_dict_ema, prog_bar=False, logger=True, on_step=False, on_epoch=True)
 
     def on_train_batch_end(self, *args, **kwargs):
         if self.use_ema:
@@ -480,7 +477,7 @@ class DDPM(pl.LightningModule):
         x = self.get_input(batch, self.first_stage_key)
         N = min(x.shape[0], N)
         n_row = min(x.shape[0], n_row)
-        x = x.to('cuda')[:N] #
+        x = x.to(self.device)[:N]
         log["inputs"] = x
 
         # get diffusion row
@@ -490,7 +487,7 @@ class DDPM(pl.LightningModule):
         for t in range(self.num_timesteps):
             if t % self.log_every_t == 0 or t == self.num_timesteps - 1:
                 t = repeat(torch.tensor([t]), '1 -> b', b=n_row)
-                t = t.to('cuda').long() #self.device
+                t = t.to(self.device).long()
                 noise = torch.randn_like(x_start)
                 x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
                 diffusion_row.append(x_noisy)
@@ -537,7 +534,6 @@ class LatentDiffusion(DDPM):
                  scale_by_std=False,
                  force_null_conditioning=False,
                  *args, **kwargs):
-        
         self.force_null_conditioning = force_null_conditioning
         self.num_timesteps_cond = default(num_timesteps_cond, 1)
         self.scale_by_std = scale_by_std
@@ -597,7 +593,7 @@ class LatentDiffusion(DDPM):
             # set rescale weight to 1./std of encodings
             print("### USING STD-RESCALING ###")
             x = super().get_input(batch, self.first_stage_key)
-            x = x.to('cuda') #self.device
+            x = x.to(self.device)
             encoder_posterior = self.encode_first_stage(x)
             z = self.get_first_stage_encoding(encoder_posterior).detach()
             del self.scale_factor
@@ -645,7 +641,7 @@ class LatentDiffusion(DDPM):
     def _get_denoise_row_from_list(self, samples, desc='', force_no_decoder_quantization=False):
         denoise_row = []
         for zd in tqdm(samples, desc=desc):
-            denoise_row.append(self.decode_first_stage(zd.to('cuda'), # self.device
+            denoise_row.append(self.decode_first_stage(zd.to(self.device),
                                                        force_not_quantize=force_no_decoder_quantization))
         n_imgs_per_row = len(denoise_row)
         denoise_row = torch.stack(denoise_row)  # n_log_step, n_row, C, H, W
@@ -771,7 +767,7 @@ class LatentDiffusion(DDPM):
         x = super().get_input(batch, k)
         if bs is not None:
             x = x[:bs]
-        x = x.to('cuda') #self.device
+        x = x.to(self.device)
         encoder_posterior = self.encode_first_stage(x)
         z = self.get_first_stage_encoding(encoder_posterior).detach()
 
@@ -784,14 +780,14 @@ class LatentDiffusion(DDPM):
                 elif cond_key in ['class_label', 'cls']:
                     xc = batch
                 else:
-                    xc = super().get_input(batch, cond_key).to('cuda') #self.device
+                    xc = super().get_input(batch, cond_key).to(self.device)
             else:
                 xc = x
             if not self.cond_stage_trainable or force_c_encode:
                 if isinstance(xc, dict) or isinstance(xc, list):
                     c = self.get_learned_conditioning(xc)
                 else:
-                    c = self.get_learned_conditioning(xc.to('cuda')) #self.device
+                    c = self.get_learned_conditioning(xc.to(self.device))
             else:
                 c = xc
             if bs is not None:
@@ -839,13 +835,13 @@ class LatentDiffusion(DDPM):
         return loss
 
     def forward(self, x, c, *args, **kwargs):
-        t = torch.randint(0, self.num_timesteps, (x.shape[0],), device='cuda').long() #self.device
+        t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
         if self.model.conditioning_key is not None:
             assert c is not None
             if self.cond_stage_trainable:
                 c = self.get_learned_conditioning(c)
             if self.shorten_cond_schedule:  # TODO: drop this option
-                tc = self.cond_ids[t].to('cuda') #self.device
+                tc = self.cond_ids[t].to(self.device)
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
         return self.p_losses(x, c, t, *args, **kwargs)
 
@@ -904,7 +900,7 @@ class LatentDiffusion(DDPM):
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
 
-        logvar_t = self.logvar[t].to('cuda') #self.device
+        logvar_t = self.logvar[t].to(self.device)
         loss = loss_simple / torch.exp(logvar_t) + logvar_t
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar
         if self.learn_logvar:
@@ -997,7 +993,7 @@ class LatentDiffusion(DDPM):
         else:
             b = batch_size = shape[0]
         if x_T is None:
-            img = torch.randn(shape, device='cuda') #self.device
+            img = torch.randn(shape, device=self.device)
         else:
             img = x_T
         intermediates = []
@@ -1017,7 +1013,7 @@ class LatentDiffusion(DDPM):
             temperature = [temperature] * timesteps
 
         for i in iterator:
-            ts = torch.full((b,), i, device='cuda', dtype=torch.long) #self.device
+            ts = torch.full((b,), i, device=self.device, dtype=torch.long)
             if self.shorten_cond_schedule:
                 assert self.model.conditioning_key != 'hybrid'
                 tc = self.cond_ids[ts].to(cond.device)
@@ -1132,19 +1128,19 @@ class LatentDiffusion(DDPM):
                 c = self.get_learned_conditioning(xc)
             else:
                 if hasattr(xc, "to"):
-                    xc = xc.to('cuda') #self.device
+                    xc = xc.to(self.device)
                 c = self.get_learned_conditioning(xc)
         else:
             if self.cond_stage_key in ["class_label", "cls"]:
-                xc = self.cond_stage_model.get_unconditional_conditioning(batch_size, device='cuda') #self.device
+                xc = self.cond_stage_model.get_unconditional_conditioning(batch_size, device=self.device)
                 return self.get_learned_conditioning(xc)
             else:
                 raise NotImplementedError("todo")
         if isinstance(c, list):  # in case the encoder gives us a list
             for i in range(len(c)):
-                c[i] = repeat(c[i], '1 ... -> b ...', b=batch_size).to('cuda') #self.device
+                c[i] = repeat(c[i], '1 ... -> b ...', b=batch_size).to(self.device)
         else:
-            c = repeat(c, '1 ... -> b ...', b=batch_size).to('cuda') #self.device
+            c = repeat(c, '1 ... -> b ...', b=batch_size).to(self.device)
         return c
 
     @torch.no_grad()
@@ -1192,7 +1188,7 @@ class LatentDiffusion(DDPM):
             for t in range(self.num_timesteps):
                 if t % self.log_every_t == 0 or t == self.num_timesteps - 1:
                     t = repeat(torch.tensor([t]), '1 -> b', b=n_row)
-                    t = t.to('cuda').long() #self.device
+                    t = t.to(self.device).long()
                     noise = torch.randn_like(z_start)
                     z_noisy = self.q_sample(x_start=z_start, t=t, noise=noise)
                     diffusion_row.append(self.decode_first_stage(z_noisy))
@@ -1224,7 +1220,7 @@ class LatentDiffusion(DDPM):
                                                              quantize_denoised=True)
                     # samples, z_denoise_row = self.sample(cond=c, batch_size=N, return_intermediates=True,
                     #                                      quantize_denoised=True)
-                x_samples = self.decode_first_stage(samples.to('cuda')) #self.device
+                x_samples = self.decode_first_stage(samples.to(self.device))
                 log["samples_x0_quantized"] = x_samples
 
         if unconditional_guidance_scale > 1.0:
@@ -1243,14 +1239,14 @@ class LatentDiffusion(DDPM):
         if inpaint:
             # make a simple center square
             b, h, w = z.shape[0], z.shape[2], z.shape[3]
-            mask = torch.ones(N, h, w).to('cuda') #self.device
+            mask = torch.ones(N, h, w).to(self.device)
             # zeros will be filled in
             mask[:, h // 4:3 * h // 4, w // 4:3 * w // 4] = 0.
             mask = mask[:, None, ...]
             with ema_scope("Plotting Inpaint"):
                 samples, _ = self.sample_log(cond=c, batch_size=N, ddim=use_ddim, eta=ddim_eta,
                                              ddim_steps=ddim_steps, x0=z[:N], mask=mask)
-            x_samples = self.decode_first_stage(samples.to('cuda')) #self.device
+            x_samples = self.decode_first_stage(samples.to(self.device))
             log["samples_inpainting"] = x_samples
             log["mask"] = mask
 
@@ -1259,7 +1255,7 @@ class LatentDiffusion(DDPM):
             with ema_scope("Plotting Outpaint"):
                 samples, _ = self.sample_log(cond=c, batch_size=N, ddim=use_ddim, eta=ddim_eta,
                                              ddim_steps=ddim_steps, x0=z[:N], mask=mask)
-            x_samples = self.decode_first_stage(samples.to('cuda')) #self.device
+            x_samples = self.decode_first_stage(samples.to(self.device))
             log["samples_outpainting"] = x_samples
 
         if plot_progressive_rows:
@@ -1364,10 +1360,10 @@ class LatentUpscaleDiffusion(LatentDiffusion):
         super().__init__(*args, **kwargs)
         # assumes that neither the cond_stage nor the low_scale_model contain trainable params
         assert not self.cond_stage_trainable
-        
         self.instantiate_low_stage(low_scale_config)
         self.low_scale_key = low_scale_key
         self.noise_level_key = noise_level_key
+
     def instantiate_low_stage(self, config):
         model = instantiate_from_config(config)
         self.low_scale_model = model.eval()
@@ -1436,7 +1432,7 @@ class LatentUpscaleDiffusion(LatentDiffusion):
             for t in range(self.num_timesteps):
                 if t % self.log_every_t == 0 or t == self.num_timesteps - 1:
                     t = repeat(torch.tensor([t]), '1 -> b', b=n_row)
-                    t = t.to('cuda').long() #self.device
+                    t = t.to(self.device).long()
                     noise = torch.randn_like(z_start)
                     z_noisy = self.q_sample(x_start=z_start, t=t, noise=noise)
                     diffusion_row.append(self.decode_first_stage(z_noisy))
@@ -1526,12 +1522,8 @@ class LatentFinetuneDiffusion(LatentDiffusion):
         if exists(ckpt_path):
             self.init_from_ckpt(ckpt_path, ignore_keys)
 
-    def init_from_ckpt(self, path, ignore_keys=list(), only_model=False):        
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
-        sd = torch.load(path, map_location=device)
+    def init_from_ckpt(self, path, ignore_keys=list(), only_model=False):
+        sd = torch.load(path, map_location="cpu")
         if "state_dict" in list(sd.keys()):
             sd = sd["state_dict"]
         keys = list(sd.keys())
@@ -1602,7 +1594,7 @@ class LatentFinetuneDiffusion(LatentDiffusion):
             for t in range(self.num_timesteps):
                 if t % self.log_every_t == 0 or t == self.num_timesteps - 1:
                     t = repeat(torch.tensor([t]), '1 -> b', b=n_row)
-                    t = t.to('cuda').long() #self.device
+                    t = t.to(self.device).long()
                     noise = torch.randn_like(z_start)
                     z_noisy = self.q_sample(x_start=z_start, t=t, noise=noise)
                     diffusion_row.append(self.decode_first_stage(z_noisy))
@@ -1672,7 +1664,7 @@ class LatentInpaintDiffusion(LatentFinetuneDiffusion):
             cc = rearrange(batch[ck], 'b h w c -> b c h w').to(memory_format=torch.contiguous_format).float()
             if bs is not None:
                 cc = cc[:bs]
-                cc = cc.to('cuda') #self.device
+                cc = cc.to(self.device)
             bchw = z.shape
             if ck != self.masked_image_key:
                 cc = torch.nn.functional.interpolate(cc, size=bchw[-2:])
@@ -1702,6 +1694,7 @@ class LatentDepth2ImageDiffusion(LatentFinetuneDiffusion):
         super().__init__(concat_keys=concat_keys, *args, **kwargs)
         self.depth_model = instantiate_from_config(depth_stage_config)
         self.depth_stage_key = concat_keys[0]
+
     @torch.no_grad()
     def get_input(self, batch, k, cond_key=None, bs=None, return_first_stage_outputs=False):
         # note: restricted to non-trainable encoders currently
@@ -1716,7 +1709,7 @@ class LatentDepth2ImageDiffusion(LatentFinetuneDiffusion):
             cc = batch[ck]
             if bs is not None:
                 cc = cc[:bs]
-                cc = cc.to('cuda') #self.device
+                cc = cc.to(self.device)
             cc = self.depth_model(cc)
             cc = torch.nn.functional.interpolate(
                 cc,
@@ -1759,6 +1752,7 @@ class LatentUpscaleFinetuneDiffusion(LatentFinetuneDiffusion):
             assert exists(low_scale_key)
             self.instantiate_low_stage(low_scale_config)
             self.low_scale_key = low_scale_key
+
     def instantiate_low_stage(self, config):
         model = instantiate_from_config(config)
         self.low_scale_model = model.eval()
@@ -1787,7 +1781,7 @@ class LatentUpscaleFinetuneDiffusion(LatentFinetuneDiffusion):
                                p1=self.reshuffle_patch_size, p2=self.reshuffle_patch_size)
             if bs is not None:
                 cc = cc[:bs]
-                cc = cc.to('cuda') #self.device
+                cc = cc.to(self.device)
             if exists(self.low_scale_model) and ck == self.low_scale_key:
                 cc, noise_level = self.low_scale_model(cc)
             c_cat.append(cc)

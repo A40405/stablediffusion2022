@@ -25,9 +25,9 @@ def chunk(it, size):
     return iter(lambda: tuple(islice(it, size)), ())
 
 
-def load_model_from_config(config, ckpt, device=torch.device("cuda"), verbose=False):
+def load_model_from_config(config, ckpt, device="cuda", verbose=False):
     
-    model = instantiate_from_config(config.model)
+    model = instantiate_from_config(config.model,device)
     print()
     print(f"Loading model from {ckpt}")
     pl_sd = torch.load(ckpt, map_location=device)
