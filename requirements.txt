@@ -1,5 +1,3 @@
-colabcode
-fastapi
 pytorch-lightning==1.8.4
 intel-extension-for-pytorch
 omegaconf
@@ -12,3 +10,4 @@ invisible-watermark
 memory-profiler
 streamlit
 streamlit-drawable-canvas
+timm
