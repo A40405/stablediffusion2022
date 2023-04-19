@@ -11,3 +11,4 @@ memory-profiler
 streamlit
 streamlit-drawable-canvas
 timm
+gradio
