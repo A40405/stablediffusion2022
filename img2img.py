@@ -26,13 +26,13 @@ def chunk(it, size):
     return iter(lambda: tuple(islice(it, size)), ())
 
 
-def load_model_from_config(config, ckpt, verbose=False):
+def load_model_from_config(config, ckpt, device = 'cuda', verbose=False):
+    model = instantiate_from_config(config.model, device)
     print(f"Loading model from {ckpt}")
-    pl_sd = torch.load(ckpt, map_location="cpu")
+    pl_sd = torch.load(ckpt, map_location=device)
     if "global_step" in pl_sd:
         print(f"Global Step: {pl_sd['global_step']}")
     sd = pl_sd["state_dict"]
-    model = instantiate_from_config(config.model)
     m, u = model.load_state_dict(sd, strict=False)
     if len(m) > 0 and verbose:
         print("missing keys:")
@@ -41,9 +41,8 @@ def load_model_from_config(config, ckpt, verbose=False):
         print("unexpected keys:")
         print(u)
 
-    model.cuda()
     model.eval()
-    return model
+    return model.to(device)
 
 
 def load_img(path):
@@ -57,9 +56,8 @@ def load_img(path):
     image = torch.from_numpy(image)
     return 2. * image - 1.
 
-
-def main():
-    parser = argparse.ArgumentParser()
+def parse_args():    
+    parser = argparse.ArgumentParser('Set stable diffusion', add_help=False)
 
     parser.add_argument(
         "--prompt",
@@ -70,7 +68,7 @@ def main():
     )
 
     parser.add_argument(
-        "--init-img",
+        "--init_img",
         type=str,
         nargs="?",
         help="path to the input image"
@@ -180,12 +178,20 @@ def main():
         choices=["full", "autocast"],
         default="autocast"
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        help="Device on which Stable Diffusion will be run",
+        choices=["cpu", "cuda"],
+        default="cpu"
+    )
+    return parser
 
-    opt = parser.parse_args()
+def main(opt):
     seed_everything(opt.seed)
 
     config = OmegaConf.load(f"{opt.config}")
-    model = load_model_from_config(config, f"{opt.ckpt}")
+    model = load_model_from_config(config, f"{opt.ckpt}",device = opt.device)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
@@ -276,4 +282,21 @@ def main():
 
 
 # if __name__ == "__main__":
-#     main()
+#    if os.path.exists('stablediffusion2022/outputs2'): # Xóa thư mục nếu tồn tại
+#         shutil.rmtree('stablediffusion2022/outputs2')
+#     parser = argparse.ArgumentParser(parents=[parse_args2()])
+#     "Text to image by stable diffusion", 
+#     text = "draw car brand mercedes maybach s650"
+#     text = "a professional photograph of supermen protect the Earth"
+
+#     opt = parser.parse_args([
+#                             "--prompt",f"{text}",
+#                             "--init_img","./stablediffusion2022/inputs2/tulen."
+#                             "--outdir","./stablediffusion2022/outputs2/txt2img-samples",
+#                             "--ckpt","./stablediffusion2022/checkpoints/768-v-noema.ckpt",
+#                             # "--ckpt","./stablediffusion2022/checkpoints/768-v-ema.ckpt",
+#                             "--config","./stablediffusion2022/configs/stable-diffusion/v2-inference-v-ema.yaml",
+#                             "--device","cuda", ])          
+
+#     main2(opt)
+#     torch.cuda.empty_cache()
