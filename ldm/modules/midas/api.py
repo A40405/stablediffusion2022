@@ -11,12 +11,12 @@ from ldm.modules.midas.midas.midas_net_custom import MidasNet_small
 from ldm.modules.midas.midas.transforms import Resize, NormalizeImage, PrepareForNet
 
 
-ISL_PATHS = {
-    "dpt_large": "midas_models/dpt_large-midas-2f21e586.pt",
-    "dpt_hybrid": "midas_models/dpt_hybrid-midas-501f0c75.pt",
-    "midas_v21": "",
-    "midas_v21_small": "",
-}
+# ISL_PATHS = {
+#     "dpt_large": "midas_models/dpt_large-midas-2f21e586.pt",
+#     "dpt_hybrid": "midas_models/dpt_hybrid-midas-501f0c75.pt",
+#     "midas_v21": "",
+#     "midas_v21_small": "",
+# }
 
 
 def disabled_train(self, mode=True):
@@ -70,10 +70,10 @@ def load_midas_transform(model_type):
     return transform
 
 
-def load_model(model_type):
+def load_model(model_type,model_path):
     # https://github.com/isl-org/MiDaS/blob/master/run.py
     # load network
-    model_path = ISL_PATHS[model_type]
+    # model_path = ISL_PATHS[model_type]
     if model_type == "dpt_large":  # DPT-Large
         model = DPTDepthModel(
             path=model_path,
@@ -147,10 +147,10 @@ class MiDaSInference(nn.Module):
         "midas_v21_small",
     ]
 
-    def __init__(self, model_type):
+    def __init__(self, model_type,model_path):
         super().__init__()
         assert (model_type in self.MODEL_TYPES_ISL)
-        model, _ = load_model(model_type)
+        model, _ = load_model(model_type,model_path)
         self.model = model
         self.model.train = disabled_train
 
