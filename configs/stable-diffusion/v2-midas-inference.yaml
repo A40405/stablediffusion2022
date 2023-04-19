@@ -22,6 +22,7 @@ model:
       target: ldm.modules.midas.api.MiDaSInference
       params:
         model_type: "dpt_hybrid"
+        model_path: "./stablediffusion2022/checkpoints/midas.pt"
 
     unet_config:
       target: ldm.modules.diffusionmodules.openaimodel.UNetModel

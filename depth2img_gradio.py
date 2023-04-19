@@ -1,4 +1,4 @@
-import sys
+# import sys
 import torch
 import numpy as np
 import gradio as gr
@@ -142,9 +142,9 @@ def predict(input_image, sampler, prompt, steps, num_samples, scale, seed, eta, 
     return result
 
 
-def run():
-    sampler = initialize_model(sys.argv[1], sys.argv[2])
-
+def run(config, ckpt):
+    # sampler = initialize_model(sys.argv[1], sys.argv[2])
+    sampler = initialize_model(config, ckpt)
     block = gr.Blocks().queue()
     with block:
         with gr.Row():
@@ -183,5 +183,5 @@ def run():
 
 
     block.launch()
-if __name__ == '__main__':
-    run()
+# if __name__ == '__main__':
+#     run()
