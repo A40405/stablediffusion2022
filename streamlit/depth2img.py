@@ -1,4 +1,4 @@
-# import sys
+import sys
 import torch
 import numpy as np
 import streamlit as st
@@ -105,11 +105,11 @@ def paint(sampler, image, prompt, t_enc, seed, scale, num_samples=1, callback=No
     return [put_watermark(Image.fromarray(img.astype(np.uint8)), wm_encoder) for img in result]
 
 
-def run(config, ckpt):
+def run():
     st.title("Stable Diffusion Depth2Img")
-    # sampler = initialize_model(sys.argv[1], sys.argv[2])
-    sampler = initialize_model(config, ckpt)
-    
+    # run via streamlit run scripts/demo/depth2img.py <path-tp-config> <path-to-ckpt>
+    sampler = initialize_model(sys.argv[1], sys.argv[2])
+
     image = st.file_uploader("Image", ["jpg", "png"])
     if image:
         image = Image.open(image)
@@ -153,5 +153,5 @@ def run(config, ckpt):
                 st.image(image, output_format='PNG')
 
 
-# if __name__ == "__main__":
-#     run()
+if __name__ == "__main__":
+    run()

@@ -1,4 +1,4 @@
-# import sys
+import sys
 import cv2
 import torch
 import numpy as np
@@ -134,7 +134,7 @@ def pad_image(input_image):
         np.pad(np.array(input_image), ((0, pad_h), (0, pad_w), (0, 0)), mode='edge'))
     return im_padded
 
-def predict(input_image, sampler, prompt, ddim_steps, num_samples, scale, seed):
+def predict(input_image, prompt, ddim_steps, num_samples, scale, seed):
     init_image = input_image["image"].convert("RGB")
     init_mask = input_image["mask"].convert("RGB")
     image = pad_image(init_image) # resize to integer multiple of 32
@@ -156,44 +156,40 @@ def predict(input_image, sampler, prompt, ddim_steps, num_samples, scale, seed):
 
     return result
 
-def run(config, ckpt):
-    
-    # sampler = initialize_model(sys.argv[1], sys.argv[2])
-    sampler = initialize_model(config, ckpt)
-    
-    block = gr.Blocks().queue()
-    with block:
-        with gr.Row():
-            gr.Markdown("## Stable Diffusion Inpainting")
 
-        with gr.Row():
-            with gr.Column():
-                input_image = gr.Image(source='upload', tool='sketch', type="pil")
-                prompt = gr.Textbox(label="Prompt")
-                run_button = gr.Button(label="Run")
-                with gr.Accordion("Advanced options", open=False):
-                    num_samples = gr.Slider(
-                        label="Images", minimum=1, maximum=4, value=4, step=1)
-                    ddim_steps = gr.Slider(label="Steps", minimum=1,
-                                        maximum=50, value=45, step=1)
-                    scale = gr.Slider(
-                        label="Guidance Scale", minimum=0.1, maximum=30.0, value=10, step=0.1
-                    )
-                    seed = gr.Slider(
-                        label="Seed",
-                        minimum=0,
-                        maximum=2147483647,
-                        step=1,
-                        randomize=True,
-                    )
-            with gr.Column():
-                gallery = gr.Gallery(label="Generated images", show_label=False).style(
-                    grid=[2], height="auto")
+sampler = initialize_model(sys.argv[1], sys.argv[2])
 
-        run_button.click(fn=predict, inputs=[
-                        input_image, sampler, prompt, ddim_steps, num_samples, scale, seed], outputs=[gallery])
+block = gr.Blocks().queue()
+with block:
+    with gr.Row():
+        gr.Markdown("## Stable Diffusion Inpainting")
+
+    with gr.Row():
+        with gr.Column():
+            input_image = gr.Image(source='upload', tool='sketch', type="pil")
+            prompt = gr.Textbox(label="Prompt")
+            run_button = gr.Button(label="Run")
+            with gr.Accordion("Advanced options", open=False):
+                num_samples = gr.Slider(
+                    label="Images", minimum=1, maximum=4, value=4, step=1)
+                ddim_steps = gr.Slider(label="Steps", minimum=1,
+                                       maximum=50, value=45, step=1)
+                scale = gr.Slider(
+                    label="Guidance Scale", minimum=0.1, maximum=30.0, value=10, step=0.1
+                )
+                seed = gr.Slider(
+                    label="Seed",
+                    minimum=0,
+                    maximum=2147483647,
+                    step=1,
+                    randomize=True,
+                )
+        with gr.Column():
+            gallery = gr.Gallery(label="Generated images", show_label=False).style(
+                grid=[2], height="auto")
+
+    run_button.click(fn=predict, inputs=[
+                     input_image, prompt, ddim_steps, num_samples, scale, seed], outputs=[gallery])
 
 
-    block.launch()
-# if __name__ == "__main__":
-#     run()
+block.launch()

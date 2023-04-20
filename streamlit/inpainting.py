@@ -1,4 +1,4 @@
-# import sys
+import sys
 import cv2
 import torch
 import numpy as np
@@ -124,11 +124,10 @@ def inpaint(sampler, image, mask, prompt, seed, scale, ddim_steps, num_samples=1
     return [put_watermark(Image.fromarray(img.astype(np.uint8)), wm_encoder) for img in result]
 
 
-def run(config, ckpt):
+def run():
     st.title("Stable Diffusion Inpainting")
 
-    # sampler = initialize_model(sys.argv[1], sys.argv[2])
-    sampler = initialize_model(config, ckpt)
+    sampler = initialize_model(sys.argv[1], sys.argv[2])
 
     image = st.file_uploader("Image", ["jpg", "png"])
     if image:
@@ -192,5 +191,5 @@ def run(config, ckpt):
                     st.image(image, output_format='PNG')
 
 
-# if __name__ == "__main__":
-#     run()
+if __name__ == "__main__":
+    run()

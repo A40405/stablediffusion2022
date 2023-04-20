@@ -1,4 +1,4 @@
-# import sys
+import sys
 import torch
 import numpy as np
 import gradio as gr
@@ -127,7 +127,7 @@ def pad_image(input_image):
     return im_padded
 
 
-def predict(input_image, sampler, prompt, steps, num_samples, scale, seed, eta, noise_level):
+def predict(input_image, prompt, steps, num_samples, scale, seed, eta, noise_level):
     init_image = input_image.convert("RGB")
     image = pad_image(init_image)  # resize to integer multiple of 32
     width, height = image.size
@@ -148,55 +148,50 @@ def predict(input_image, sampler, prompt, steps, num_samples, scale, seed, eta, 
     )
     return result
 
-def run(config, ckpt):
-    
-    # sampler = initialize_model(sys.argv[1], sys.argv[2])
-    sampler = initialize_model(config, ckpt)
 
-    block = gr.Blocks().queue()
-    with block:
-        with gr.Row():
-            gr.Markdown("## Stable Diffusion Upscaling")
+sampler = initialize_model(sys.argv[1], sys.argv[2])
 
-        with gr.Row():
-            with gr.Column():
-                input_image = gr.Image(source='upload', type="pil")
-                gr.Markdown(
-                    "Tip: Add a description of the object that should be upscaled, e.g.: 'a professional photograph of a cat")
-                prompt = gr.Textbox(label="Prompt")
-                run_button = gr.Button(label="Run")
-                with gr.Accordion("Advanced options", open=False):
-                    num_samples = gr.Slider(
-                        label="Number of Samples", minimum=1, maximum=4, value=1, step=1)
-                    steps = gr.Slider(label="DDIM Steps", minimum=2,
-                                    maximum=200, value=75, step=1)
-                    scale = gr.Slider(
-                        label="Scale", minimum=0.1, maximum=30.0, value=10, step=0.1
-                    )
-                    seed = gr.Slider(
-                        label="Seed",
-                        minimum=0,
-                        maximum=2147483647,
-                        step=1,
-                        randomize=True,
-                    )
-                    eta = gr.Number(label="eta (DDIM)",
-                                    value=0.0, min=0.0, max=1.0)
-                    noise_level = None
-                    if isinstance(sampler.model, LatentUpscaleDiffusion):
-                        # TODO: make this work for all models
-                        noise_level = gr.Number(
-                            label="Noise Augmentation", min=0, max=350, value=20, step=1)
+block = gr.Blocks().queue()
+with block:
+    with gr.Row():
+        gr.Markdown("## Stable Diffusion Upscaling")
 
-            with gr.Column():
-                gallery = gr.Gallery(label="Generated images", show_label=False).style(
-                    grid=[2], height="auto")
+    with gr.Row():
+        with gr.Column():
+            input_image = gr.Image(source='upload', type="pil")
+            gr.Markdown(
+                "Tip: Add a description of the object that should be upscaled, e.g.: 'a professional photograph of a cat")
+            prompt = gr.Textbox(label="Prompt")
+            run_button = gr.Button(label="Run")
+            with gr.Accordion("Advanced options", open=False):
+                num_samples = gr.Slider(
+                    label="Number of Samples", minimum=1, maximum=4, value=1, step=1)
+                steps = gr.Slider(label="DDIM Steps", minimum=2,
+                                  maximum=200, value=75, step=1)
+                scale = gr.Slider(
+                    label="Scale", minimum=0.1, maximum=30.0, value=10, step=0.1
+                )
+                seed = gr.Slider(
+                    label="Seed",
+                    minimum=0,
+                    maximum=2147483647,
+                    step=1,
+                    randomize=True,
+                )
+                eta = gr.Number(label="eta (DDIM)",
+                                value=0.0, min=0.0, max=1.0)
+                noise_level = None
+                if isinstance(sampler.model, LatentUpscaleDiffusion):
+                    # TODO: make this work for all models
+                    noise_level = gr.Number(
+                        label="Noise Augmentation", min=0, max=350, value=20, step=1)
 
-        run_button.click(fn=predict, inputs=[
-                        input_image, sampler, prompt, steps, num_samples, scale, seed, eta, noise_level], outputs=[gallery])
+        with gr.Column():
+            gallery = gr.Gallery(label="Generated images", show_label=False).style(
+                grid=[2], height="auto")
+
+    run_button.click(fn=predict, inputs=[
+                     input_image, prompt, steps, num_samples, scale, seed, eta, noise_level], outputs=[gallery])
 
 
-    block.launch()
-    
-# if __name__ == "__main__":
-#     run()
+block.launch()
