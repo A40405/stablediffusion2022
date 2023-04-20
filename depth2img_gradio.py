@@ -143,6 +143,7 @@ def predict(input_image, sampler, prompt, steps, num_samples, scale, seed, eta, 
 
 
 def run(config, ckpt):
+    
     # sampler = initialize_model(sys.argv[1], sys.argv[2])
     sampler = initialize_model(config, ckpt)
     block = gr.Blocks().queue()
