@@ -232,9 +232,7 @@ def main(opt):
 
     assert os.path.isfile(opt.init_img)
     input_image = Image.open(opt.init_img).convert("RGB")
-    
-    assert 0. <= opt.strength <= 1., 'can only work with strength in [0.0, 1.0]'
-    
+        
     images = predict(sampler,input_image, opt.prompt, opt.ddim_steps, opt.n_samples, opt.scale, opt.seed)
     outdir = opt.outdir
     if not os.path.exists(outdir):
