@@ -131,8 +131,10 @@ def pad_image(input_image):
     return im_padded
 
 def predict(sampler, input_image, prompt, ddim_steps, num_samples, scale, seed):
-    init_image = input_image["image"].convert("RGB")
-    init_mask = input_image["mask"].convert("RGB")
+
+    init_image = input_image.convert("RGB")
+    init_mask = Image.new("RGB", input_image.size, (0, 0, 0))
+
     image = pad_image(init_image) # resize to integer multiple of 32
     mask = pad_image(init_mask) # resize to integer multiple of 32
     width, height = image.size
@@ -232,7 +234,7 @@ def main(opt):
     sampler = initialize_model(opt.config, opt.ckpt, opt.device)
 
     assert os.path.isfile(opt.init_img)
-    input_image = Image.open(opt.init_img).convert("RGB")
+    input_image = Image.open(opt.init_img)
         
     images = predict(sampler,input_image, opt.prompt, opt.ddim_steps, opt.n_samples, opt.scale, opt.seed)
     outdir = opt.outdir
