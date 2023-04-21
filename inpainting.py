@@ -180,11 +180,12 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--n_iter",
+        "--ddim_steps",
         type=int,
-        default=1,
-        help="sample this often",
+        default=50,
+        help="number of ddim sampling steps",
     )
+
 
     parser.add_argument(
         "--n_samples",
