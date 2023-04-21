@@ -15,13 +15,11 @@ from ldm.data.util import AddMiDaS
 torch.set_grad_enabled(False)
 
 
-def initialize_model(config, ckpt):
+def initialize_model(config, ckpt, device = 'cuda'):
     config = OmegaConf.load(config)
     model = instantiate_from_config(config.model)
     model.load_state_dict(torch.load(ckpt)["state_dict"], strict=False)
 
-    device = torch.device(
-        "cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
     sampler = DDIMSampler(model)
     return sampler
@@ -174,35 +172,10 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--fixed_code",
-        action='store_true',
-        help="if enabled, uses the same starting code across all samples ",
-    )
-
-    parser.add_argument(
         "--ddim_eta",
         type=float,
         default=0.0,
         help="ddim eta (eta=0.0 corresponds to deterministic sampling",
-    )
-    parser.add_argument(
-        "--n_iter",
-        type=int,
-        default=1,
-        help="sample this often",
-    )
-
-    parser.add_argument(
-        "--C",
-        type=int,
-        default=4,
-        help="latent channels",
-    )
-    parser.add_argument(
-        "--f",
-        type=int,
-        default=8,
-        help="downsampling factor, most often 8 or 16",
     )
 
     parser.add_argument(
@@ -211,14 +184,7 @@ def parse_args():
         default=2,
         help="how many samples to produce for each given prompt. A.k.a batch size",
     )
-
-    parser.add_argument(
-        "--n_rows",
-        type=int,
-        default=0,
-        help="rows in the grid (default: n_samples)",
-    )
-
+    
     parser.add_argument(
         "--scale",
         type=float,
@@ -234,34 +200,25 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--from-file",
-        type=str,
-        help="if specified, load prompts from this file",
-    )
-    parser.add_argument(
         "--config",
         type=str,
         default="configs/stable-diffusion/v2-inference.yaml",
         help="path to config which constructs model",
     )
+    
     parser.add_argument(
         "--ckpt",
         type=str,
         help="path to checkpoint of model",
     )
+    
     parser.add_argument(
         "--seed",
         type=int,
         default=42,
         help="the seed (for reproducible sampling)",
     )
-    parser.add_argument(
-        "--precision",
-        type=str,
-        help="evaluate at this precision",
-        choices=["full", "autocast"],
-        default="autocast"
-    )
+
     parser.add_argument(
         "--device",
         type=str,
@@ -271,9 +228,13 @@ def parse_args():
     )
     return parser
 def main(opt):
-    sampler = initialize_model(opt.config, opt.ckpt)
+    sampler = initialize_model(opt.config, opt.ckpt, opt.device)
 
+    assert os.path.isfile(opt.init_img)
     input_image = Image.open(opt.init_img).convert("RGB")
+    
+    assert 0. <= opt.strength <= 1., 'can only work with strength in [0.0, 1.0]'
+    
     images = predict(sampler,input_image, opt.prompt, opt.ddim_steps, opt.n_samples, opt.scale, opt.seed, opt.ddim_eta, opt.strength)
     outdir = opt.outdir
     if not os.path.exists(outdir):
@@ -287,3 +248,21 @@ def main(opt):
     print(f"Generated {len(images)} images and saved to {outdir}")
     
 
+# if __name__ == "__main__":
+    # parser = argparse.ArgumentParser(parents=[parse_args2()])
+
+    # #"Text to image by stable diffusion", 
+    # # text = "draw car brand mercedes maybach s650"
+    # # text = "a professional photograph of supermen protect the Earth"
+    # text = 'A fantasy landscape, trending on artstation'
+
+    # opt = parser.parse_args([
+    #                         "--prompt",f"{text}",
+    #                         "--init_img","./stablediffusion2022/inputs/1.jpg",
+    #                         "--outdir","./stablediffusion2022/outputs/depth2img-samples",
+    #                         "--strength", "0.8",
+    #                         "--ckpt","./stablediffusion2022/checkpoints/512-depth-ema.ckpt",
+    #                         "--config","./stablediffusion2022/configs/stable-diffusion/v2-midas-inference.yaml",
+    #                         "--device","cuda", ])      
+    # main2(opt)
+    # torch.cuda.empty_cache()

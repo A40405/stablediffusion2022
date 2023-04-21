@@ -1,7 +1,6 @@
-import sys
 import torch
 import numpy as np
-import gradio as gr
+import argparse, os
 from PIL import Image
 from omegaconf import OmegaConf
 from einops import repeat, rearrange
@@ -17,13 +16,11 @@ from ldm.util import exists, instantiate_from_config
 torch.set_grad_enabled(False)
 
 
-def initialize_model(config, ckpt):
+def initialize_model(config, ckpt, device):
     config = OmegaConf.load(config)
     model = instantiate_from_config(config.model)
     model.load_state_dict(torch.load(ckpt)["state_dict"], strict=False)
 
-    device = torch.device(
-        "cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
     sampler = DDIMSampler(model)
     return sampler
@@ -127,7 +124,7 @@ def pad_image(input_image):
     return im_padded
 
 
-def predict(input_image, prompt, steps, num_samples, scale, seed, eta, noise_level):
+def predict(sampler, input_image, prompt, steps, num_samples, scale, seed, eta, noise_level):
     init_image = input_image.convert("RGB")
     image = pad_image(init_image)  # resize to integer multiple of 32
     width, height = image.size
@@ -148,50 +145,114 @@ def predict(input_image, prompt, steps, num_samples, scale, seed, eta, noise_lev
     )
     return result
 
+def parse_args():    
+    parser = argparse.ArgumentParser('Set stable diffusion', add_help=False)
 
-sampler = initialize_model(sys.argv[1], sys.argv[2])
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        nargs="?",
+        default="a painting of a virus monster playing guitar",
+        help="the prompt to render"
+    )
 
-block = gr.Blocks().queue()
-with block:
-    with gr.Row():
-        gr.Markdown("## Stable Diffusion Upscaling")
+    parser.add_argument(
+        "--init_img",
+        type=str,
+        nargs="?",
+        help="path to the input image"
+    )
 
-    with gr.Row():
-        with gr.Column():
-            input_image = gr.Image(source='upload', type="pil")
-            gr.Markdown(
-                "Tip: Add a description of the object that should be upscaled, e.g.: 'a professional photograph of a cat")
-            prompt = gr.Textbox(label="Prompt")
-            run_button = gr.Button(label="Run")
-            with gr.Accordion("Advanced options", open=False):
-                num_samples = gr.Slider(
-                    label="Number of Samples", minimum=1, maximum=4, value=1, step=1)
-                steps = gr.Slider(label="DDIM Steps", minimum=2,
-                                  maximum=200, value=75, step=1)
-                scale = gr.Slider(
-                    label="Scale", minimum=0.1, maximum=30.0, value=10, step=0.1
-                )
-                seed = gr.Slider(
-                    label="Seed",
-                    minimum=0,
-                    maximum=2147483647,
-                    step=1,
-                    randomize=True,
-                )
-                eta = gr.Number(label="eta (DDIM)",
-                                value=0.0, min=0.0, max=1.0)
-                noise_level = None
-                if isinstance(sampler.model, LatentUpscaleDiffusion):
-                    # TODO: make this work for all models
-                    noise_level = gr.Number(
-                        label="Noise Augmentation", min=0, max=350, value=20, step=1)
+    parser.add_argument(
+        "--outdir",
+        type=str,
+        nargs="?",
+        help="dir to write results to",
+        default="outputs/img2img-samples"
+    )
 
-        with gr.Column():
-            gallery = gr.Gallery(label="Generated images", show_label=False).style(
-                grid=[2], height="auto")
+    parser.add_argument(
+        "--ddim_steps",
+        type=int,
+        default=75,
+        help="number of ddim sampling steps",
+    )
 
-    run_button.click(fn=predict, inputs=[
-                     input_image, prompt, steps, num_samples, scale, seed, eta, noise_level], outputs=[gallery])
+    parser.add_argument(
+        "--noise_level",
+        type=int,
+        default=20,
+        help="number noise_levels",
+    )
+    
+    parser.add_argument(
+        "--ddim_eta",
+        type=float,
+        default=0.0,
+        help="ddim eta (eta=0.0 corresponds to deterministic sampling",
+    )
+
+    parser.add_argument(
+        "--n_samples",
+        type=int,
+        default=2,
+        help="how many samples to produce for each given prompt. A.k.a batch size",
+    )
+    
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=9.0,
+        help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
+    )
+
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/stable-diffusion/v2-inference.yaml",
+        help="path to config which constructs model",
+    )
+    
+    parser.add_argument(
+        "--ckpt",
+        type=str,
+        help="path to checkpoint of model",
+    )
+    
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="the seed (for reproducible sampling)",
+    )
+
+    parser.add_argument(
+        "--device",
+        type=str,
+        help="Device on which Stable Diffusion will be run",
+        choices=["cpu", "cuda"],
+        default="cpu"
+    )
+    return parser
 
 
-block.launch()
+def main(opt):
+    sampler = initialize_model(opt.config, opt.ckpt, opt.device)
+
+    assert os.path.isfile(opt.init_img)
+    input_image = Image.open(opt.init_img).convert("RGB")
+    
+    assert 0. <= opt.strength <= 1., 'can only work with strength in [0.0, 1.0]'
+    
+    images = predict(sampler,input_image, opt.prompt, opt.ddim_steps, opt.n_samples, opt.scale, opt.seed, opt.ddim_eta, opt.noise_level)
+    outdir = opt.outdir
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    # Save generated images to output directory
+    for i, img in enumerate(images):
+        filename = f"image_{i}.png"
+        filepath = os.path.join(outdir, filename)
+        img.save(filepath)
+    print(f"Generated {len(images)} images and saved to {outdir}")
+    

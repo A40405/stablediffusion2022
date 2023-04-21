@@ -90,12 +90,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--fixed_code",
-        action='store_true',
-        help="if enabled, uses the same starting code across all samples ",
-    )
-
-    parser.add_argument(
         "--ddim_eta",
         type=float,
         default=0.0,
@@ -106,19 +100,6 @@ def parse_args():
         type=int,
         default=1,
         help="sample this often",
-    )
-
-    parser.add_argument(
-        "--C",
-        type=int,
-        default=4,
-        help="latent channels",
-    )
-    parser.add_argument(
-        "--f",
-        type=int,
-        default=8,
-        help="downsampling factor, most often 8 or 16",
     )
 
     parser.add_argument(
@@ -150,7 +131,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--from-file",
+        "--from_file",
         type=str,
         help="if specified, load prompts from this file",
     )
